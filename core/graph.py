@@ -1,8 +1,8 @@
 """Core graph data structures."""
 
 from dataclasses import dataclass, field
-from typing import Optional, List
-from utils.types import NodeType, EdgeException, NodeException
+from typing import Optional, List, Dict, Any
+from utils.types import NodeType, NodeException
 
 
 @dataclass
