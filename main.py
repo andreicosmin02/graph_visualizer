@@ -9,7 +9,10 @@ from core import Node, Position
 from services import GraphService, FileService
 from ui import ThemedFrame, ThemedEntry
 from ui.components import Card, SectionHeader, Separator, DimLabel, HoverButton
-from visualization.flow_visualizer import GenericMaxFlowVisualizer
+from algorithms.generic_max_flow import run_generic_max_flow
+from algorithms.ford_fulkerson import run_ford_fulkerson
+from algorithms.edmonds_karp import run_edmonds_karp
+from visualization.flow_visualizer import MaxFlowVisualizer
 
 try:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -147,7 +150,11 @@ class GraphVisualizerApp:
         ac.pack(**pad)
         SectionHeader(ac, text="Algorithms").pack(fill=tk.X)
         self._sdbtn(ac, "Run Generic Max Flow", self._run_max_flow,
-                    bg='#9BCB2F', hover_bg='#aad84a', fg='#131214')
+                    bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
+        self._sdbtn(ac, "Run Ford-Fulkerson", self._run_ford_fulkerson,
+                    bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
+        self._sdbtn(ac, "Run Edmonds-Karp", self._run_edmonds_karp,
+                    bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
 
         # Instructions
         ic = Card(sidebar)
@@ -290,10 +297,10 @@ class GraphVisualizerApp:
                                        f"Edge {source_id} \u2192 {target_id} already exists")
                 return
 
-        weight = simpledialog.askinteger(
-            "Edge Weight", f"Weight for {source_id} \u2192 {target_id}:",
-            initialvalue=1, minvalue=0)
-        if weight is None:
+        flux = simpledialog.askinteger(
+            "Edge Flux", f"Flux for {source_id} \u2192 {target_id}:",
+            initialvalue=0, minvalue=0)
+        if flux is None:
             return
 
         capacity = simpledialog.askinteger(
@@ -303,16 +310,16 @@ class GraphVisualizerApp:
             return
 
         self.graph_service.graph.add_edge(source_id, target_id,
-                                          weight=weight, capacity=capacity)
-        self._set_status(f"Edge {source_id} \u2192 {target_id}  w={weight}  c={capacity}")
+                                          flux=flux, capacity=capacity)
+        self._set_status(f"Edge {source_id} \u2192 {target_id}  f={flux}  c={capacity}")
         self._update_display()
 
     def _edit_edge(self, edge) -> None:
         values = simpledialog.askstring(
             "Edit Edge",
             f"Edge {edge.source} \u2192 {edge.target}\n"
-            "Format: weight, capacity  (e.g. 3, 10)",
-            initialvalue=f"{edge.weight}, {edge.capacity}",
+            "Format: flux, capacity  (e.g. 3, 10)",
+            initialvalue=f"{edge.flux}, {edge.capacity}",
         )
         if not values:
             return
@@ -325,10 +332,10 @@ class GraphVisualizerApp:
                 raise ValueError
         except Exception:
             messagebox.showerror("Invalid input",
-                                 "Enter two non-negative integers: weight, capacity")
+                                 "Enter two non-negative integers: flux, capacity")
             return
 
-        edge.weight, edge.capacity = w, c
+        edge.flux, edge.capacity = w, c
         self._set_status(
             f"Updated {edge.source} \u2192 {edge.target}  w={w}  c={c}")
         self._update_display()
@@ -401,6 +408,15 @@ class GraphVisualizerApp:
     # ── Algorithms ────────────────────────────────────────────────────────────
 
     def _run_max_flow(self) -> None:
+        self._run_algorithm(run_generic_max_flow, "Generic Max Flow")
+
+    def _run_ford_fulkerson(self) -> None:
+        self._run_algorithm(run_ford_fulkerson, "Ford-Fulkerson (FFE)")
+
+    def _run_edmonds_karp(self) -> None:
+        self._run_algorithm(run_edmonds_karp, "Edmonds-Karp")
+
+    def _run_algorithm(self, algorithm_fn, title: str) -> None:
         nodes = self.graph_service.get_all_nodes()
         if len(nodes) < 2:
             messagebox.showwarning("Not enough nodes", "Add at least 2 nodes first.")
@@ -440,7 +456,8 @@ class GraphVisualizerApp:
                 f"Some edges have zero capacity:\n{names}\n\nContinue?"):
                 return
 
-        GenericMaxFlowVisualizer(self.root, self.graph_service.graph, source, sink)
+        MaxFlowVisualizer(self.root, self.graph_service.graph, source, sink,
+                          algorithm_fn=algorithm_fn, title=title)
 
     # ── Rendering ─────────────────────────────────────────────────────────────
 
@@ -519,7 +536,7 @@ class GraphVisualizerApp:
                 connectionstyle=f"arc3,rad={rad}",
             ))
 
-            self.ax.text(label_x, label_y, f"{edge.weight}/{edge.capacity}",
+            self.ax.text(label_x, label_y, f"{edge.flux}/{edge.capacity}",
                          ha='center', va='center', fontsize=9, color='#C5AD89',
                          bbox=dict(boxstyle='round,pad=0.4', facecolor='#1a1516',
                                    edgecolor='#524A45', alpha=0.95),

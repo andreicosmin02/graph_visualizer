@@ -14,7 +14,7 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
-from algorithms.generic_max_flow import FlowStep, run_generic_max_flow
+from algorithms.generic_max_flow import FlowStep
 from core.graph import Graph, Node
 from ui.components import (
     Card, HoverButton, PhaseBadge, ProgressBar,
@@ -42,11 +42,12 @@ _EDGE_FLOW     = '#9BCB2F'  # green (final flow view)
 
 
 
-class GenericMaxFlowVisualizer:
-    """Toplevel window that plays back the Generic Max Flow execution."""
+class MaxFlowVisualizer:
+    """Toplevel window that plays back a max flow algorithm execution."""
 
     def __init__(self, parent: tk.Tk, graph: Graph,
-                 source: str, sink: str) -> None:
+                 source: str, sink: str,
+                 algorithm_fn, title: str = "Max Flow") -> None:
         if not MATPLOTLIB_AVAILABLE:
             messagebox.showerror(
                 "Missing dependency",
@@ -57,6 +58,8 @@ class GenericMaxFlowVisualizer:
         self._graph  = graph
         self._source = source
         self._sink   = sink
+        self._title  = title
+        self._algorithm_fn = algorithm_fn
         self._steps: List[FlowStep] = []
         self._current = 0
 
@@ -71,7 +74,7 @@ class GenericMaxFlowVisualizer:
              e.capacity if e.capacity is not None else 0.0)
             for e in self._graph.edges
         ]
-        self._steps = run_generic_max_flow(
+        self._steps = self._algorithm_fn(
             list(self._graph.nodes.keys()), edges,
             self._source, self._sink)
 
@@ -79,7 +82,7 @@ class GenericMaxFlowVisualizer:
 
     def _build_window(self) -> None:
         win = tk.Toplevel(self._parent)
-        win.title("Generic Max Flow — Step-by-Step Visualizer")
+        win.title(f"{self._title} — Step-by-Step Visualizer")
         win.geometry("1300x780")
         win.minsize(900, 520)
         win.config(bg=_BG)
@@ -89,7 +92,7 @@ class GenericMaxFlowVisualizer:
         top = tk.Frame(win, bg=_CARD_BG, height=44)
         top.pack(fill=tk.X)
         top.pack_propagate(False)
-        tk.Label(top, text="Generic Max Flow Visualizer",
+        tk.Label(top, text=f"{self._title} Visualizer",
                  bg=_CARD_BG, fg=_TEXT,
                  font=('Segoe UI', 12, 'bold'), padx=14).pack(side=tk.LEFT, pady=10)
         tk.Label(top, text=f"s = {self._source}     t = {self._sink}",
@@ -385,7 +388,7 @@ class GenericMaxFlowVisualizer:
                  (src.position.y + tgt.position.y) / 2
         px, py = -dy / length, dx / length
         offset = 0.30 if abs(rad) > 0 else 0.18
-        sign   = 1 if rad >= 0 else -1
+        sign   = -1 if rad >= 0 else 1
         lx = mx + px * offset * sign
         ly = my + py * offset * sign
         edge_c = box_color or (_EDGE_PATH if highlight else _BORDER)
