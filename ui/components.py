@@ -186,6 +186,7 @@ class PhaseBadge(tk.Label):
         'init':       ('#1a2015', '#9BCB2F', 'INITIAL STATE'),
         'found_path': ('#1e1a08', '#F1C232', 'PATH FOUND'),
         'augmented':  ('#152015', '#9BCB2F', 'AUGMENTED'),
+        'scaling':    ('#1a1520', '#C5AD89', 'SCALING'),
         'final':      ('#2E2A33', '#C5AD89', 'COMPLETE'),
     }
 

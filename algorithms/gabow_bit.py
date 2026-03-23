@@ -77,8 +77,6 @@ def run_gabow_bit(
     for u, v, c in edges:
         cap[(u, v)] = cap.get((u, v), 0.0) + max(0.0, c)
 
-    all_arcs = list(cap.keys())
-
     # ---- Create scaled capacity levels ---------------------------------
     # c_0 = original, c_1 = ⌊c_0/2⌋, ..., c_p where max(c_p) ≤ 1
     cap_levels: list[dict[ArcKey, float]] = [dict(cap)]
@@ -94,24 +92,20 @@ def run_gabow_bit(
 
     # ---- Helpers -------------------------------------------------------
     def build_residual(cap_k: dict[ArcKey, float], flow_k: dict[ArcKey, float]) -> dict[ArcKey, float]:
-        """Build residual graph from capacity and flow at a given level."""
+        """Build residual graph from capacity and flow at a given level.
+
+        r(u,v) = c(u,v) - f(u,v)  (forward residual)
+        r(v,u) += f(u,v)          (backward residual)
+        """
         r: dict[ArcKey, float] = {}
-        for arc in cap_k:
-            r[arc] = cap_k[arc] - flow_k.get(arc, 0.0)
-        for (u, v) in cap_k:
-            if (v, u) not in r:
-                r[(v, u)] = 0.0
-            r[(v, u)] = r.get((v, u), 0.0) + flow_k.get((u, v), 0.0) - (0.0 if (v, u) not in cap_k else 0.0)
-        # Simpler approach: build from scratch
-        r2: dict[ArcKey, float] = {}
         for (u, v) in cap_k:
             fwd = cap_k[(u, v)] - flow_k.get((u, v), 0.0)
             bwd = flow_k.get((u, v), 0.0)
-            r2[(u, v)] = r2.get((u, v), 0.0) + fwd
-            if (v, u) not in r2:
-                r2[(v, u)] = 0.0
-            r2[(v, u)] = r2.get((v, u), 0.0) + bwd
-        return r2
+            r[(u, v)] = r.get((u, v), 0.0) + fwd
+            if (v, u) not in r:
+                r[(v, u)] = 0.0
+            r[(v, u)] = r.get((v, u), 0.0) + bwd
+        return r
 
     def active_residual(r: dict[ArcKey, float]) -> dict[ArcKey, float]:
         return {arc: val for arc, val in r.items() if val > 0}

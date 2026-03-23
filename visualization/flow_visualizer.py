@@ -312,6 +312,8 @@ class MaxFlowVisualizer:
             path_str = " \u2192 ".join(step.path)
             title = (f"Residual Network  \u2014  "
                      f"D\u0303 = ({path_str}),  r = {_fmt(step.path_residual)}")
+        elif step.phase == 'scaling':
+            title = f"Residual Network  \u2014  Scaling Phase"
         else:
             title = "Residual Network  \u2014  Initial State"
 
