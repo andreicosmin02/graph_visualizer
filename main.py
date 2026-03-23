@@ -12,6 +12,8 @@ from ui.components import Card, SectionHeader, Separator, DimLabel, HoverButton
 from algorithms.generic_max_flow import run_generic_max_flow
 from algorithms.ford_fulkerson import run_ford_fulkerson
 from algorithms.edmonds_karp import run_edmonds_karp
+from algorithms.ahuja_orlin import run_ahuja_orlin
+from algorithms.gabow_bit import run_gabow_bit
 from visualization.flow_visualizer import MaxFlowVisualizer
 
 try:
@@ -154,6 +156,10 @@ class GraphVisualizerApp:
         self._sdbtn(ac, "Run Ford-Fulkerson", self._run_ford_fulkerson,
                     bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
         self._sdbtn(ac, "Run Edmonds-Karp", self._run_edmonds_karp,
+                    bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
+        self._sdbtn(ac, "Run Ahuja-Orlin", self._run_ahuja_orlin,
+                    bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
+        self._sdbtn(ac, "Run Gabow Bit", self._run_gabow_bit,
                     bg='#3A343F', hover_bg='#524A45', fg='#9BCB2F')
 
         # Instructions
@@ -415,6 +421,12 @@ class GraphVisualizerApp:
 
     def _run_edmonds_karp(self) -> None:
         self._run_algorithm(run_edmonds_karp, "Edmonds-Karp")
+
+    def _run_ahuja_orlin(self) -> None:
+        self._run_algorithm(run_ahuja_orlin, "Ahuja-Orlin (Max Capacity Scaling)")
+
+    def _run_gabow_bit(self) -> None:
+        self._run_algorithm(run_gabow_bit, "Gabow (Bit Scaling)")
 
     def _run_algorithm(self, algorithm_fn, title: str) -> None:
         nodes = self.graph_service.get_all_nodes()
