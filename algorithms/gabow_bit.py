@@ -16,7 +16,6 @@ Pseudocode reference:
 
 Complexity: O(m² log c_max)
 """
-
 from __future__ import annotations
 
 import math
@@ -28,15 +27,7 @@ ArcKey = tuple[str, str]
 
 
 def _find_path(r: dict[ArcKey, float], source: str, sink: str) -> list[str] | None:
-    """Find a random s-t path in the residual graph.
-
-    Uses random neighbor selection with backtracking.
-
-    :param r: Residual capacity dictionary mapping (u, v) -> residual value.
-    :param source: Source node ID (s).
-    :param sink: Sink node ID (t).
-    :return: List of node IDs forming the path, or None if no path exists.
-    """
+    """Find a random s-t path in the residual graph using positive residual arcs."""
     visited: set[str] = {source}
     path: list[str] = [source]
 
@@ -45,8 +36,10 @@ def _find_path(r: dict[ArcKey, float], source: str, sink: str) -> list[str] | No
         if u == sink:
             return list(path)
 
-        neighbours = [b for (a, b), res in r.items()
-                      if a == u and b not in visited and res > 0]
+        neighbours = [
+            b for (a, b), res in r.items()
+            if a == u and b not in visited and res > 0
+        ]
         if neighbours:
             b = random.choice(neighbours)
             visited.add(b)
@@ -65,6 +58,11 @@ def run_gabow_bit(
 ) -> list[FlowStep]:
     """Run the Gabow Bit Scaling algorithm.
 
+    Notes:
+        - This implementation assumes integer capacities.
+        - Input capacities are floored to non-negative integers.
+        - The visualization is organized by scaling levels.
+
     :param node_ids: All node IDs in the network.
     :param edges: List of (source, target, capacity) tuples for the original arcs.
     :param source: Source node ID (s).
@@ -73,38 +71,43 @@ def run_gabow_bit(
     """
 
     # ---- Build original capacity table ---------------------------------
+    # Gabow bit scaling is stated for integer capacities, so we floor inputs.
     cap: dict[ArcKey, float] = {}
     for u, v, c in edges:
-        cap[(u, v)] = cap.get((u, v), 0.0) + max(0.0, c)
+        cap[(u, v)] = cap.get((u, v), 0.0) + float(max(0, math.floor(c)))
 
     # ---- Create scaled capacity levels ---------------------------------
-    # c_0 = original, c_1 = ⌊c_0/2⌋, ..., c_p where max(c_p) ≤ 1
+    # c_0 = original, c_{k+1} = floor(c_k / 2), until max(c_p) <= 1
     cap_levels: list[dict[ArcKey, float]] = [dict(cap)]
     while True:
         prev = cap_levels[-1]
         max_cap = max(prev.values()) if prev else 0
         if max_cap <= 1:
             break
-        halved = {arc: math.floor(c / 2) for arc, c in prev.items()}
-        cap_levels.append(halved)
+        cap_levels.append({arc: float(math.floor(val / 2)) for arc, val in prev.items()})
 
-    p = len(cap_levels) - 1  # number of scaling levels (0..p)
+    p = len(cap_levels) - 1  # levels are 0..p, with p the coarsest
 
     # ---- Helpers -------------------------------------------------------
     def build_residual(cap_k: dict[ArcKey, float], flow_k: dict[ArcKey, float]) -> dict[ArcKey, float]:
-        """Build residual graph from capacity and flow at a given level.
+        """Build the residual graph for level k.
 
-        r(u,v) = c(u,v) - f(u,v)  (forward residual)
-        r(v,u) += f(u,v)          (backward residual)
+        For every original arc (u,v):
+            forward residual  = c_k(u,v) - f_k(u,v)
+            backward residual = f_k(u,v)
         """
         r: dict[ArcKey, float] = {}
-        for (u, v) in cap_k:
-            fwd = cap_k[(u, v)] - flow_k.get((u, v), 0.0)
-            bwd = flow_k.get((u, v), 0.0)
-            r[(u, v)] = r.get((u, v), 0.0) + fwd
+        for (u, v), c_uv in cap_k.items():
+            f_uv = flow_k.get((u, v), 0.0)
+
+            # Forward residual
+            r[(u, v)] = r.get((u, v), 0.0) + (c_uv - f_uv)
+
+            # Backward residual
             if (v, u) not in r:
                 r[(v, u)] = 0.0
-            r[(v, u)] = r.get((v, u), 0.0) + bwd
+            r[(v, u)] = r.get((v, u), 0.0) + f_uv
+
         return r
 
     def active_residual(r: dict[ArcKey, float]) -> dict[ArcKey, float]:
@@ -120,7 +123,7 @@ def run_gabow_bit(
 
     # ---- Step 0: initial state -----------------------------------------
     level_caps_str = "\n".join(
-        f"  Level {i}: c_max = {_fmt(max(lv.values()) if lv.values() else 0)}"
+        f"  Level {i}: c_max = {_fmt(max(lv.values()) if lv else 0)}"
         for i, lv in enumerate(cap_levels)
     )
 
@@ -129,11 +132,12 @@ def run_gabow_bit(
         phase='init',
         description=(
             "Initial state (Step 0)\n"
+            "Gabow Bit Scaling with integer capacities.\n"
             f"Number of scaling levels: {p + 1} (0..{p})\n\n"
             f"Capacity levels:\n{level_caps_str}\n\n"
-            f"Starting from coarsest level {p}, working back to level 0."
+            f"Start from coarsest level {p}, then lift solutions back to level 0."
         ),
-        residual=active_residual({arc: cap[arc] for arc in cap}),
+        residual={arc: val for arc, val in cap.items() if val > 0},
         path=None,
         path_residual=None,
         flow={arc: 0.0 for arc in cap},
@@ -142,36 +146,43 @@ def run_gabow_bit(
 
     iteration = 0
 
-    # ---- Solve from coarsest (level p) to finest (level 0) -------------
+    # ---- Solve coarsest level first ------------------------------------
     current_flow: dict[ArcKey, float] = {arc: 0.0 for arc in cap_levels[p]}
 
     for k in range(p, -1, -1):
         cap_k = cap_levels[k]
 
         if k < p:
-            # f₀_k = 2 · f*_{k+1}  — double the flow from previous (coarser) level
+            # Lift the solution from level k+1 to level k:
+            #     f^0_k = 2 * f*_{k+1}
+            #
+            # For integer capacities and ck+1 = floor(ck/2), this is feasible:
+            #     2 f*_{k+1}(u,v) <= 2 c_{k+1}(u,v) <= c_k(u,v)
             prev_flow = current_flow
-            current_flow = {}
-            for arc in cap_k:
-                doubled = 2 * prev_flow.get(arc, 0.0)
-                current_flow[arc] = min(doubled, cap_k[arc])
+            current_flow = {
+                arc: 2.0 * prev_flow.get(arc, 0.0)
+                for arc in cap_k
+            }
 
+            lifted_total = total_flow_value(current_flow, cap_k)
             steps.append(FlowStep(
                 index=len(steps),
                 phase='scaling',
                 description=(
-                    f"Level {k} \u2014 Initial flow = 2 \u00d7 f*_{k+1}\n"
-                    f"Capacities at level {k}, doubled flow from level {k+1}.\n"
-                    f"Total flow: {_fmt(total_flow_value(current_flow, cap_k))}"
+                    f"Level {k} — lifted initial flow from level {k + 1}\n"
+                    f"Set f₀_{k} = 2 × f*_{k + 1}.\n"
+                    "By the bit-scaling theorem, this is a feasible starting flow.\n"
+                    "The remaining corrections are completed in the residual network.\n\n"
+                    f"Initial lifted flow value at level {k}: {_fmt(lifted_total)}"
                 ),
                 residual=active_residual(build_residual(cap_k, current_flow)),
                 path=None,
                 path_residual=None,
-                flow={arc: current_flow.get(arc, 0.0) for arc in cap if arc in cap_k},
-                total_flow=total_flow_value(current_flow, cap_k),
+                flow=dict(current_flow),
+                total_flow=lifted_total,
             ))
 
-        # Build residual and find augmenting paths at this level
+        # Build residual graph for the current level and finish max flow there.
         r = build_residual(cap_k, current_flow)
 
         while True:
@@ -181,72 +192,88 @@ def run_gabow_bit(
 
             iteration += 1
 
-            # Bottleneck
-            path_r = min(r[(path[i], path[i + 1])] for i in range(len(path) - 1))
+            # In the exact theorem setting, after lifting from level k+1,
+            # augmenting paths in the residual network have residual capacity 1.
+            # We still compute the bottleneck for display/validation.
+            path_bottleneck = min(r[(path[i], path[i + 1])] for i in range(len(path) - 1))
+            delta = min(1.0, path_bottleneck)
 
-            path_str = " \u2192 ".join(path)
+            path_str = " → ".join(path)
             caps_str = ", ".join(
                 str(_fmt(r[(path[i], path[i + 1])]))
                 for i in range(len(path) - 1)
             )
 
-            # Step A: path found
             steps.append(FlowStep(
                 index=len(steps),
                 phase='found_path',
                 description=(
-                    f"Iteration {iteration}a \u2014 Path found (level {k})\n"
-                    f"D\u0303 = ({path_str})\n\n"
-                    f"r(D\u0303) = min{{{caps_str}}}\n"
-                    f"      = {_fmt(path_r)}\n\n"
-                    "The path will be augmented by this amount."
+                    f"Iteration {iteration}a — Path found (level {k})\n"
+                    f"D̃ = ({path_str})\n\n"
+                    f"Residuals on path: {{{caps_str}}}\n"
+                    f"bottleneck = {_fmt(path_bottleneck)}\n"
+                    f"augmentation used = {_fmt(delta)}\n\n"
+                    "For Gabow bit scaling with integer capacities, this is expected "
+                    "to be a unit augmentation after lifting."
                 ),
                 residual=active_residual(r),
                 path=list(path),
-                path_residual=path_r,
+                path_residual=delta,
                 flow=compute_flow_from_residual(cap_k, r),
                 total_flow=total_flow_value(compute_flow_from_residual(cap_k, r), cap_k),
             ))
 
-            # Augment
+            # Unit augmentation on this level
             for i in range(len(path) - 1):
                 u, v = path[i], path[i + 1]
-                r[(u, v)] -= path_r
-                r[(v, u)] = r.get((v, u), 0.0) + path_r
+                r[(u, v)] -= delta
+                r[(v, u)] = r.get((v, u), 0.0) + delta
 
             current_flow = compute_flow_from_residual(cap_k, r)
             new_total = total_flow_value(current_flow, cap_k)
 
-            # Step B: after augmentation
             steps.append(FlowStep(
                 index=len(steps),
                 phase='augmented',
                 description=(
-                    f"Iteration {iteration}b \u2014 After augmentation (level {k})\n"
-                    f"Sent {_fmt(path_r)} units along\n"
-                    f"D\u0303 = ({path_str})\n\n"
+                    f"Iteration {iteration}b — After augmentation (level {k})\n"
+                    f"Sent {_fmt(delta)} unit(s) along\n"
+                    f"D̃ = ({path_str})\n\n"
                     "Residual network updated:\n"
-                    + _residual_diff_text(path, path_r)
+                    + _residual_diff_text(path, delta)
                     + f"\n\nTotal flow at level {k}: {_fmt(new_total)}"
                 ),
                 residual=active_residual(r),
                 path=list(path),
-                path_residual=path_r,
+                path_residual=delta,
                 flow=compute_flow_from_residual(cap_k, r),
                 total_flow=new_total,
             ))
 
-        # Update current_flow for this level
         current_flow = compute_flow_from_residual(cap_k, r)
 
+        steps.append(FlowStep(
+            index=len(steps),
+            phase='scaling',
+            description=(
+                f"Level {k} complete\n"
+                f"A maximum flow has been obtained for capacity level {k}.\n"
+                f"Flow value at this level: {_fmt(total_flow_value(current_flow, cap_k))}"
+            ),
+            residual=active_residual(r),
+            path=None,
+            path_residual=None,
+            flow=dict(current_flow),
+            total_flow=total_flow_value(current_flow, cap_k),
+        ))
+
     # ---- Final step ----------------------------------------------------
-    # At level 0, cap_levels[0] == original cap
     final_r = build_residual(cap, current_flow)
     final_flow = compute_flow_from_residual(cap, final_r)
     tv = total_flow_value(final_flow, cap)
 
     flow_lines = "\n".join(
-        f"  f({u},{v}) = {_fmt(final_flow.get((u,v), 0.0))}"
+        f"  f({u},{v}) = {_fmt(final_flow.get((u, v), 0.0))}"
         for (u, v) in sorted(cap.keys())
     )
 
@@ -254,7 +281,7 @@ def run_gabow_bit(
         index=len(steps),
         phase='final',
         description=(
-            f"Final state \u2014 all levels processed\n"
+            "Final state — all levels processed\n"
             f"Maximum flow value = {_fmt(tv)}\n\n"
             "Arc flows:\n"
             + flow_lines

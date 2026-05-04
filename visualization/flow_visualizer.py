@@ -1,4 +1,4 @@
-"""Step-by-step visualizer for the Generic Max Flow algorithm."""
+"""Step-by-step visualizer for max flow algorithms."""
 
 from __future__ import annotations
 
@@ -30,16 +30,15 @@ _BORDER   = '#524A45'
 _BOX_FACE = '#1a1516'
 
 # node colours
-_NODE_DEFAULT = '#C5AD89'   # warm beige
-_NODE_SOURCE  = '#9BCB2F'   # green indicator
-_NODE_SINK    = '#802525'   # danger red
-_NODE_PATH    = '#F1C232'   # yellow (on path)
+_NODE_DEFAULT = '#C5AD89'
+_NODE_SOURCE  = '#9BCB2F'
+_NODE_SINK    = '#802525'
+_NODE_PATH    = '#F1C232'
 
 # edge colours
-_EDGE_RESIDUAL = '#82715B'  # bronze dim
-_EDGE_PATH     = '#F1C232'  # bright yellow
-_EDGE_FLOW     = '#9BCB2F'  # green (final flow view)
-
+_EDGE_RESIDUAL = '#82715B'
+_EDGE_PATH     = '#F1C232'
+_EDGE_FLOW     = '#9BCB2F'
 
 
 class MaxFlowVisualizer:
@@ -100,11 +99,9 @@ class MaxFlowVisualizer:
                  font=('Segoe UI', 10), padx=14).pack(side=tk.RIGHT, pady=10)
         Separator(win, color=_BORDER).pack(fill=tk.X)
 
-        # body
         body = ThemedFrame(win)
         body.pack(fill=tk.BOTH, expand=True)
 
-        # left: matplotlib canvas
         canvas_frame = ThemedFrame(body)
         canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -116,14 +113,12 @@ class MaxFlowVisualizer:
 
         Separator(body, color=_BORDER).pack(side=tk.LEFT, fill=tk.Y)
 
-        # right panel (fixed width, scrolling handled by layout order)
         panel = tk.Frame(body, bg=_BG, width=300)
         panel.pack(side=tk.RIGHT, fill=tk.Y)
         panel.pack_propagate(False)
 
         self._build_panel(panel)
 
-        # keyboard shortcuts
         win.bind('<Left>',  lambda _e: self._prev())
         win.bind('<Right>', lambda _e: self._next())
         win.bind('<Home>',  lambda _e: self._goto(0))
@@ -132,15 +127,11 @@ class MaxFlowVisualizer:
         self._render()
 
     def _build_panel(self, panel: tk.Frame) -> None:
-        # ── BOTTOM items packed first so they always stay visible ─────────────
-
-        # keyboard hint (very bottom)
         tk.Label(panel, text="← → keys  |  Home / End",
                  bg=_CARD_BG, fg=_TEXT_DIM,
                  font=('Segoe UI', 8), pady=5).pack(
             side=tk.BOTTOM, fill=tk.X)
 
-        # navigation buttons
         nav_card = Card(panel)
         nav_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
 
@@ -160,7 +151,6 @@ class MaxFlowVisualizer:
             b.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
             self._nav_buttons.append(b)
 
-        # legend
         leg_card = Card(panel)
         leg_card.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(4, 0))
         SectionHeader(leg_card, text="Legend").pack(fill=tk.X)
@@ -180,23 +170,24 @@ class MaxFlowVisualizer:
             tk.Label(row, text=label, fg=_TEXT_DIM, bg=_CARD_BG,
                      font=('Segoe UI', 8)).pack(side=tk.LEFT)
 
-        # ── TOP items ─────────────────────────────────────────────────────────
-
-        # phase badge
         self._phase_badge = PhaseBadge(panel)
         self._phase_badge.pack(fill=tk.X, padx=8, pady=(10, 4))
 
-        # step counter + progress bar
         counter_card = Card(panel)
         counter_card.pack(fill=tk.X, padx=8)
         self._step_lbl = tk.Label(counter_card, text="",
-                                   bg=_CARD_BG, fg=_TEXT,
-                                   font=('Segoe UI', 10, 'bold'))
+                                  bg=_CARD_BG, fg=_TEXT,
+                                  font=('Segoe UI', 10, 'bold'))
         self._step_lbl.pack(anchor=tk.W, padx=10, pady=(6, 3))
+
+        self._step_subtitle = tk.Label(counter_card, text="",
+                                       bg=_CARD_BG, fg=_TEXT_DIM,
+                                       font=('Segoe UI', 8))
+        self._step_subtitle.pack(anchor=tk.W, padx=10, pady=(0, 3))
+
         self._progress = ProgressBar(counter_card, height=5)
         self._progress.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        # ── MIDDLE: description fills remaining space ─────────────────────────
         desc_card = Card(panel)
         desc_card.pack(fill=tk.BOTH, expand=True, padx=8, pady=(6, 0))
         SectionHeader(desc_card, text="Step Details").pack(fill=tk.X)
@@ -246,8 +237,11 @@ class MaxFlowVisualizer:
         total = len(self._steps)
         idx   = self._current
 
+        summary = self._summary_line(step)
+
         self._phase_badge.set_phase(step.phase)
         self._step_lbl.config(text=f"Step {idx + 1} of {total}")
+        self._step_subtitle.config(text=summary)
         self._progress.set(idx, total)
 
         self._desc.config(state=tk.NORMAL)
@@ -259,7 +253,7 @@ class MaxFlowVisualizer:
         at_start = idx == 0
         at_end   = idx == total - 1
         for btn, disabled in zip(self._nav_buttons,
-                                  [at_start, at_start, at_end, at_end]):
+                                 [at_start, at_start, at_end, at_end]):
             btn.config(state=tk.DISABLED if disabled else tk.NORMAL)
 
         if step.phase == 'final':
@@ -301,23 +295,13 @@ class MaxFlowVisualizer:
             is_path = (u, v) in path_arcs
             has_rev = (v, u) in active
             rad     = 0.25 if has_rev else 0.0
-            color   = _EDGE_PATH     if is_path else _EDGE_RESIDUAL
-            lw      = 2.5            if is_path else 1.5
+            color   = _EDGE_PATH if is_path else _EDGE_RESIDUAL
+            lw      = 2.5 if is_path else 1.5
             self._draw_arrow(ax, src, tgt, color, lw, rad)
             self._draw_label(ax, src, tgt, _fmt(res), rad, highlight=is_path)
 
         self._draw_nodes(ax, nodes, path_nodes)
-
-        if step.path:
-            path_str = " \u2192 ".join(step.path)
-            title = (f"Residual Network  \u2014  "
-                     f"D\u0303 = ({path_str}),  r = {_fmt(step.path_residual)}")
-        elif step.phase == 'scaling':
-            title = f"Residual Network  \u2014  Scaling Phase"
-        else:
-            title = "Residual Network  \u2014  Initial State"
-
-        ax.set_title(title, color=_TEXT, fontsize=10, pad=10)
+        ax.set_title(self._graph_title_for_step(step), color=_TEXT, fontsize=10, pad=10)
         self._mpl.draw_idle()
 
     def _draw_flow_graph(self, step: FlowStep) -> None:
@@ -333,7 +317,7 @@ class MaxFlowVisualizer:
 
         self._set_limits(ax, nodes)
 
-        node_map  = {n.id: n for n in nodes}
+        node_map = {n.id: n for n in nodes}
         orig_arcs = {(e.source, e.target) for e in self._graph.edges}
 
         for e in self._graph.edges:
@@ -351,20 +335,41 @@ class MaxFlowVisualizer:
 
         self._draw_nodes(ax, nodes, set())
         ax.set_title(
-            f"Original Network with Flows  \u2014  Max flow = {_fmt(step.total_flow)}",
+            f"Original Network with Flows — Max flow = {_fmt(step.total_flow)}",
             color=_TEXT, fontsize=10, pad=10)
         self._mpl.draw_idle()
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _summary_line(self, step: FlowStep) -> str:
+        first_line = step.description.splitlines()[0].strip() if step.description else ""
+        return first_line[:80]
+
+    def _graph_title_for_step(self, step: FlowStep) -> str:
+        if step.path:
+            path_str = " → ".join(step.path)
+            return f"Residual Network — D̃ = ({path_str}), r = {_fmt(step.path_residual)}"
+
+        first_line = self._summary_line(step)
+
+        if step.phase == 'scaling':
+            return f"Residual Network — {first_line}"
+
+        if step.phase == 'init':
+            if "Gabow Bit Scaling" in step.description:
+                return "Residual Network — Gabow Bit Scaling Overview"
+            return "Residual Network — Initial State"
+
+        return "Residual Network"
 
     # ── primitives ────────────────────────────────────────────────────────────
 
     def _set_limits(self, ax, nodes: List[Node]):
         xs = [n.position.x for n in nodes]
         ys = [n.position.y for n in nodes]
-        m  = 1.3
-        xlim = (min(xs) - m, max(xs) + m)
-        ylim = (min(ys) - m, max(ys) + m)
-        ax.set_xlim(*xlim)
-        ax.set_ylim(*ylim)
+        m = 1.3
+        ax.set_xlim(min(xs) - m, max(xs) + m)
+        ax.set_ylim(min(ys) - m, max(ys) + m)
 
     def _draw_arrow(self, ax, src: Node, tgt: Node,
                     color: str, lw: float, rad: float) -> None:
@@ -412,19 +417,18 @@ class MaxFlowVisualizer:
             else:
                 color = _NODE_DEFAULT
 
-            on_path    = node.id in path_nodes
+            on_path = node.id in path_nodes
             ring_color = '#D8C29C' if on_path else '#524A45'
-            ring_width = 3         if on_path else 2
+            ring_width = 3 if on_path else 2
 
             ax.plot(node.position.x, node.position.y, 'o',
                     markersize=30, color=color,
                     markeredgecolor=ring_color,
                     markeredgewidth=ring_width, zorder=3)
 
-            txt_color = '#131214'
             ax.text(node.position.x, node.position.y, node.label,
                     ha='center', va='center',
-                    fontsize=12, weight='bold', color=txt_color, zorder=4)
+                    fontsize=12, weight='bold', color='#131214', zorder=4)
 
 
 def _fmt(v: Optional[float]) -> str:
